@@ -16,6 +16,11 @@ function formatMoney(n) {
   }).format(n)
 }
 
+function formatDeductionMoney(n) {
+  if (n == null || Number.isNaN(n)) return '—'
+  return `-${formatMoney(Math.abs(n))}`
+}
+
 function parseCsvFile(file) {
   return new Promise((resolve, reject) => {
     Papa.parse(file, {
@@ -29,6 +34,59 @@ function parseCsvFile(file) {
 
 const PAYOUT_STORAGE_KEY = 'rev-ripper:payout-files'
 const SHOW_STORAGE_KEY = 'rev-ripper:show-file'
+const STORAGE_DB_NAME = 'rev-ripper-db'
+const STORAGE_STORE_NAME = 'app-state'
+
+function openStorageDb() {
+  return new Promise((resolve, reject) => {
+    const request = window.indexedDB.open(STORAGE_DB_NAME, 1)
+    request.onupgradeneeded = () => {
+      const db = request.result
+      if (!db.objectStoreNames.contains(STORAGE_STORE_NAME)) {
+        db.createObjectStore(STORAGE_STORE_NAME)
+      }
+    }
+    request.onsuccess = () => resolve(request.result)
+    request.onerror = () =>
+      reject(request.error || new Error('Could not open IndexedDB.'))
+  })
+}
+
+async function getStoredValue(key) {
+  const db = await openStorageDb()
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORAGE_STORE_NAME, 'readonly')
+    const store = tx.objectStore(STORAGE_STORE_NAME)
+    const request = store.get(key)
+    request.onsuccess = () => resolve(request.result ?? null)
+    request.onerror = () =>
+      reject(request.error || new Error('Could not read from IndexedDB.'))
+  })
+}
+
+async function setStoredValue(key, value) {
+  const db = await openStorageDb()
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORAGE_STORE_NAME, 'readwrite')
+    const store = tx.objectStore(STORAGE_STORE_NAME)
+    const request = store.put(value, key)
+    request.onsuccess = () => resolve()
+    request.onerror = () =>
+      reject(request.error || new Error('Could not write to IndexedDB.'))
+  })
+}
+
+async function removeStoredValue(key) {
+  const db = await openStorageDb()
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORAGE_STORE_NAME, 'readwrite')
+    const store = tx.objectStore(STORAGE_STORE_NAME)
+    const request = store.delete(key)
+    request.onsuccess = () => resolve()
+    request.onerror = () =>
+      reject(request.error || new Error('Could not delete from IndexedDB.'))
+  })
+}
 
 export default function App() {
   const [payoutEntries, setPayoutEntries] = useState([])
@@ -40,63 +98,68 @@ export default function App() {
   const [copiedMetric, setCopiedMetric] = useState(null)
   const payoutInputRef = useRef(null)
   const showInputRef = useRef(null)
+  const hasHydratedPayouts = useRef(false)
+  const hasHydratedShow = useRef(false)
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(PAYOUT_STORAGE_KEY)
-      if (!saved) return
-      const parsed = JSON.parse(saved)
-      if (!Array.isArray(parsed)) return
-      const validEntries = parsed.filter(
-        (entry) =>
-          entry &&
-          typeof entry.id === 'string' &&
-          typeof entry.name === 'string' &&
-          Array.isArray(entry.rows),
-      )
-      setPayoutEntries(validEntries)
-    } catch {
-      // Ignore bad data and start fresh.
-    }
+    ;(async () => {
+      try {
+        const parsed = await getStoredValue(PAYOUT_STORAGE_KEY)
+        if (!Array.isArray(parsed)) return
+        const validEntries = parsed.filter(
+          (entry) =>
+            entry &&
+            typeof entry.id === 'string' &&
+            typeof entry.name === 'string' &&
+            Array.isArray(entry.rows),
+        )
+        setPayoutEntries(validEntries)
+      } catch {
+        // Ignore bad data and start fresh.
+      } finally {
+        hasHydratedPayouts.current = true
+      }
+    })()
   }, [])
 
   useEffect(() => {
-    localStorage.setItem(PAYOUT_STORAGE_KEY, JSON.stringify(payoutEntries))
+    if (!hasHydratedPayouts.current) return
+    void setStoredValue(PAYOUT_STORAGE_KEY, payoutEntries)
   }, [payoutEntries])
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(SHOW_STORAGE_KEY)
-      if (!saved) return
-      const parsed = JSON.parse(saved)
-      if (
-        !parsed ||
-        typeof parsed.id !== 'string' ||
-        typeof parsed.name !== 'string' ||
-        !Array.isArray(parsed.rows)
-      ) {
-        return
+    ;(async () => {
+      try {
+        const parsed = await getStoredValue(SHOW_STORAGE_KEY)
+        if (
+          !parsed ||
+          typeof parsed.id !== 'string' ||
+          typeof parsed.name !== 'string' ||
+          !Array.isArray(parsed.rows)
+        ) {
+          return
+        }
+        setShowListFile({ name: parsed.name })
+        setShowRows(parsed.rows)
+      } catch {
+        // Ignore bad data and start fresh.
+      } finally {
+        hasHydratedShow.current = true
       }
-      setShowListFile({ name: parsed.name })
-      setShowRows(parsed.rows)
-    } catch {
-      // Ignore bad data and start fresh.
-    }
+    })()
   }, [])
 
   useEffect(() => {
+    if (!hasHydratedShow.current) return
     if (!showRows.length || !showListFile?.name) {
-      localStorage.removeItem(SHOW_STORAGE_KEY)
+      void removeStoredValue(SHOW_STORAGE_KEY)
       return
     }
-    localStorage.setItem(
-      SHOW_STORAGE_KEY,
-      JSON.stringify({
+    void setStoredValue(SHOW_STORAGE_KEY, {
         id: showListFile.id ?? showListFile.name,
         name: showListFile.name,
         rows: showRows,
-      }),
-    )
+      })
   }, [showRows, showListFile])
 
   const loadPayouts = useCallback(async (fileList) => {
@@ -387,7 +450,9 @@ export default function App() {
             <div className="metric metric--out">
               <dt className="metric__label">Refunds (total)</dt>
               <dd className="metric__value-wrap">
-                <span className="metric__value">{formatMoney(result.refunds)}</span>
+                <span className="metric__value">
+                  {formatDeductionMoney(result.refunds)}
+                </span>
                 <button
                   type="button"
                   className="copy-btn"
@@ -400,7 +465,7 @@ export default function App() {
             <div className="metric metric--out">
               <dt className="metric__label">Fees (total)</dt>
               <dd className="metric__value-wrap">
-                <span className="metric__value">{formatMoney(result.fees)}</span>
+                <span className="metric__value">{formatDeductionMoney(result.fees)}</span>
                 <button
                   type="button"
                   className="copy-btn"
@@ -429,22 +494,20 @@ export default function App() {
             </div>
             <div className="total total--net">
               <span className="total__label">
-                Net payout total (sales − refunds)
+                Net payout total (sales − refunds − fees)
               </span>
               <span className="total__value">{formatMoney(result.netTotal)}</span>
             </div>
             <div className="total total--sum5">
               <span className="total__label">
-                Sum of all five figures (shop + online + trade + refunds + fees)
+                Sum using all five figures (shop + online + trade − refunds − fees)
               </span>
               <span className="total__value">{formatMoney(result.sumDisplayedFive)}</span>
             </div>
             <p className="total-note">
               Gross sales is only the three channels. Net total is what remains
-              after subtracting refunds only (sales are already net values). The
-              bottom line is the simple arithmetic sum of the five displayed
-              amounts (useful if you track refunds and fees as positive line
-              items elsewhere).
+              after subtracting refunds and fees. The bottom line uses all five
+              displayed figures with refunds and fees treated as deductions.
             </p>
           </div>
         </section>

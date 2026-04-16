@@ -190,13 +190,13 @@ export function aggregatePayoutRows(payoutRows, showOrderIds) {
     }
 
     if (isRefundType(typeRaw)) {
-      const r = netVal != null ? netVal : amountVal
+      const r = amountVal != null ? amountVal : netVal
       if (r != null && r !== 0) refunds += Math.abs(r)
       if (!emptyOrder) orderedRowsAccounted += 1
       continue
     }
 
-    const valueBase = netVal != null ? netVal : amountVal
+    const valueBase = amountVal != null ? amountVal : netVal
     if (valueBase == null || valueBase === 0) continue
 
     // Sales channels are strictly order-based. Non-order rows can still affect
@@ -228,8 +228,8 @@ export function aggregatePayoutRows(payoutRows, showOrderIds) {
     tradeShowSales,
     refunds,
     fees,
-    netTotal: shopSales + onlineSales + tradeShowSales - refunds,
-    sumDisplayedFive: shopSales + onlineSales + tradeShowSales + refunds + fees,
+    netTotal: shopSales + onlineSales + tradeShowSales - refunds - fees,
+    sumDisplayedFive: shopSales + onlineSales + tradeShowSales - refunds - fees,
     orderedRowsTotal,
     orderedRowsAccounted,
     orderedRowsUnaccounted: Math.max(orderedRowsTotal - orderedRowsAccounted, 0),
