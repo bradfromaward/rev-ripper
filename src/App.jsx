@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Papa from 'papaparse'
 import {
   aggregatePayoutRows,
@@ -27,62 +27,203 @@ function parseCsvFile(file) {
   })
 }
 
+const PAYOUT_STORAGE_KEY = 'rev-ripper:payout-files'
+const SHOW_STORAGE_KEY = 'rev-ripper:show-file'
+
 export default function App() {
-  const [payoutFiles, setPayoutFiles] = useState([])
+  const [payoutEntries, setPayoutEntries] = useState([])
   const [showListFile, setShowListFile] = useState(null)
-  const [rows, setRows] = useState([])
   const [showRows, setShowRows] = useState([])
   const [error, setError] = useState(null)
+  const [isPayoutDragActive, setIsPayoutDragActive] = useState(false)
+  const [isShowDragActive, setIsShowDragActive] = useState(false)
+  const [copiedMetric, setCopiedMetric] = useState(null)
+  const payoutInputRef = useRef(null)
+  const showInputRef = useRef(null)
 
-  const loadPayouts = useCallback(async (fileList) => {
-    const files = Array.from(fileList || [])
-    setPayoutFiles(files)
-    setError(null)
-    if (files.length === 0) {
-      setRows([])
-      return
-    }
+  useEffect(() => {
     try {
-      const all = []
-      for (const f of files) {
-        const data = await parseCsvFile(f)
-        all.push(...data)
-      }
-      setRows(all)
-    } catch (e) {
-      setError(e?.message || 'Could not read payout CSV.')
-      setRows([])
+      const saved = localStorage.getItem(PAYOUT_STORAGE_KEY)
+      if (!saved) return
+      const parsed = JSON.parse(saved)
+      if (!Array.isArray(parsed)) return
+      const validEntries = parsed.filter(
+        (entry) =>
+          entry &&
+          typeof entry.id === 'string' &&
+          typeof entry.name === 'string' &&
+          Array.isArray(entry.rows),
+      )
+      setPayoutEntries(validEntries)
+    } catch {
+      // Ignore bad data and start fresh.
     }
   }, [])
 
+  useEffect(() => {
+    localStorage.setItem(PAYOUT_STORAGE_KEY, JSON.stringify(payoutEntries))
+  }, [payoutEntries])
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(SHOW_STORAGE_KEY)
+      if (!saved) return
+      const parsed = JSON.parse(saved)
+      if (
+        !parsed ||
+        typeof parsed.id !== 'string' ||
+        typeof parsed.name !== 'string' ||
+        !Array.isArray(parsed.rows)
+      ) {
+        return
+      }
+      setShowListFile({ name: parsed.name })
+      setShowRows(parsed.rows)
+    } catch {
+      // Ignore bad data and start fresh.
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!showRows.length || !showListFile?.name) {
+      localStorage.removeItem(SHOW_STORAGE_KEY)
+      return
+    }
+    localStorage.setItem(
+      SHOW_STORAGE_KEY,
+      JSON.stringify({
+        id: showListFile.id ?? showListFile.name,
+        name: showListFile.name,
+        rows: showRows,
+      }),
+    )
+  }, [showRows, showListFile])
+
+  const loadPayouts = useCallback(async (fileList) => {
+    const files = Array.from(fileList || [])
+    setError(null)
+    if (files.length === 0) {
+      return
+    }
+    try {
+      const parsedFiles = []
+      for (const f of files) {
+        const data = await parseCsvFile(f)
+        parsedFiles.push({
+          id: `${f.name}:${f.size}:${f.lastModified}`,
+          name: f.name,
+          rows: data,
+        })
+      }
+      setPayoutEntries((prev) => {
+        const existingIds = new Set(prev.map((entry) => entry.id))
+        const uniqueIncoming = parsedFiles.filter((entry) => !existingIds.has(entry.id))
+        return [...prev, ...uniqueIncoming]
+      })
+    } catch (e) {
+      setError(e?.message || 'Could not read payout CSV.')
+    }
+  }, [])
+
+  const removePayoutFile = useCallback((id) => {
+    setPayoutEntries((prev) => prev.filter((entry) => entry.id !== id))
+  }, [])
+
+  const onDragOverPayouts = useCallback((event) => {
+    event.preventDefault()
+    if (!isPayoutDragActive) {
+      setIsPayoutDragActive(true)
+    }
+  }, [isPayoutDragActive])
+
+  const onDragLeavePayouts = useCallback((event) => {
+    event.preventDefault()
+    setIsPayoutDragActive(false)
+  }, [])
+
+  const onDropPayouts = useCallback(
+    (event) => {
+      event.preventDefault()
+      setIsPayoutDragActive(false)
+      loadPayouts(event.dataTransfer?.files)
+    },
+    [loadPayouts],
+  )
+
   const loadShowList = useCallback(async (fileList) => {
     const f = fileList?.[0] ?? null
-    setShowListFile(f)
     setError(null)
     if (!f) {
+      setShowListFile(null)
       setShowRows([])
       return
     }
     try {
       const data = await parseCsvFile(f)
+      setShowListFile({
+        id: `${f.name}:${f.size}:${f.lastModified}`,
+        name: f.name,
+      })
       setShowRows(data)
     } catch (e) {
       setError(e?.message || 'Could not read show order list.')
+      setShowListFile(null)
       setShowRows([])
     }
   }, [])
 
+  const removeShowListFile = useCallback(() => {
+    setShowListFile(null)
+    setShowRows([])
+    setError(null)
+  }, [])
+
+  const onDragOverShow = useCallback((event) => {
+    event.preventDefault()
+    if (!isShowDragActive) {
+      setIsShowDragActive(true)
+    }
+  }, [isShowDragActive])
+
+  const onDragLeaveShow = useCallback((event) => {
+    event.preventDefault()
+    setIsShowDragActive(false)
+  }, [])
+
+  const onDropShow = useCallback(
+    (event) => {
+      event.preventDefault()
+      setIsShowDragActive(false)
+      loadShowList(event.dataTransfer?.files)
+    },
+    [loadShowList],
+  )
+
   const showIds = useMemo(() => extractShowOrderIds(showRows), [showRows])
+  const rows = useMemo(
+    () => payoutEntries.flatMap((entry) => entry.rows),
+    [payoutEntries],
+  )
 
   const result = useMemo(() => {
     if (!rows.length) return null
     return aggregatePayoutRows(rows, showIds)
   }, [rows, showIds])
 
+  const copyAmount = useCallback(async (key, amount) => {
+    try {
+      await navigator.clipboard.writeText(formatMoney(amount))
+      setCopiedMetric(key)
+      window.setTimeout(() => setCopiedMetric(null), 1200)
+    } catch {
+      setError('Could not copy to clipboard.')
+    }
+  }, [])
+
   return (
     <div className="layout">
       <header className="hero">
-        <h1 className="title">Rev Ripper</h1>
+        <h1 className="title">Shopify Reconcile Tool</h1>
         <p className="lede">
           Upload Shopify Payments payout CSVs and your Show Order List. We split
           revenue into shop (POS), online, and trade show (matched orders), and
@@ -95,33 +236,96 @@ export default function App() {
           <label className="label" htmlFor="payout-input">
             Shopify payout CSVs
           </label>
+          <div
+            className={`dropzone${isPayoutDragActive ? ' dropzone--active' : ''}`}
+            onDragOver={onDragOverPayouts}
+            onDragLeave={onDragLeavePayouts}
+            onDrop={onDropPayouts}
+            onClick={() => payoutInputRef.current?.click()}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                payoutInputRef.current?.click()
+              }
+            }}
+            aria-label="Drag and drop payout CSVs or click to select"
+          >
+            Drag and drop CSV files here, or click to browse.
+          </div>
           <input
             id="payout-input"
             className="input"
             type="file"
             accept=".csv,text/csv"
             multiple
+            ref={payoutInputRef}
             onChange={(e) => loadPayouts(e.target.files)}
           />
-          {payoutFiles.length > 0 && (
+          {payoutEntries.length > 0 && (
             <p className="hint">
-              {payoutFiles.length} file{payoutFiles.length === 1 ? '' : 's'} selected
+              {payoutEntries.length} file{payoutEntries.length === 1 ? '' : 's'} added
             </p>
+          )}
+          {payoutEntries.length > 0 && (
+            <ul className="file-list" aria-label="Added payout files">
+              {payoutEntries.map((entry) => (
+                <li key={entry.id} className="file-list__item">
+                  <span>{entry.name}</span>
+                  <button
+                    type="button"
+                    className="file-list__remove"
+                    onClick={() => removePayoutFile(entry.id)}
+                  >
+                    Delete
+                  </button>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
         <div className="field">
           <label className="label" htmlFor="show-input">
             Show Order List (CSV)
           </label>
+          <div
+            className={`dropzone${isShowDragActive ? ' dropzone--active' : ''}`}
+            onDragOver={onDragOverShow}
+            onDragLeave={onDragLeaveShow}
+            onDrop={onDropShow}
+            onClick={() => showInputRef.current?.click()}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+                showInputRef.current?.click()
+              }
+            }}
+            aria-label="Drag and drop show order CSV or click to select"
+          >
+            Drag and drop show order CSV here, or click to browse.
+          </div>
           <input
             id="show-input"
             className="input"
             type="file"
             accept=".csv,text/csv"
+            ref={showInputRef}
             onChange={(e) => loadShowList(e.target.files)}
           />
           {showListFile && (
-            <p className="hint">{showListFile.name}</p>
+            <div className="file-list__item">
+              <span className="hint">{showListFile.name}</span>
+              <button
+                type="button"
+                className="file-list__remove"
+                onClick={removeShowListFile}
+              >
+                Delete
+              </button>
+            </div>
           )}
         </div>
         {showIds.size > 0 && (
@@ -143,23 +347,68 @@ export default function App() {
           <dl className="grid">
             <div className="metric">
               <dt className="metric__label">Shop sales (POS / in-store)</dt>
-              <dd className="metric__value">{formatMoney(result.shopSales)}</dd>
+              <dd className="metric__value-wrap">
+                <span className="metric__value">{formatMoney(result.shopSales)}</span>
+                <button
+                  type="button"
+                  className="copy-btn"
+                  onClick={() => copyAmount('shopSales', result.shopSales)}
+                >
+                  {copiedMetric === 'shopSales' ? 'Copied' : 'Copy'}
+                </button>
+              </dd>
             </div>
             <div className="metric">
               <dt className="metric__label">Online sales</dt>
-              <dd className="metric__value">{formatMoney(result.onlineSales)}</dd>
+              <dd className="metric__value-wrap">
+                <span className="metric__value">{formatMoney(result.onlineSales)}</span>
+                <button
+                  type="button"
+                  className="copy-btn"
+                  onClick={() => copyAmount('onlineSales', result.onlineSales)}
+                >
+                  {copiedMetric === 'onlineSales' ? 'Copied' : 'Copy'}
+                </button>
+              </dd>
             </div>
             <div className="metric">
               <dt className="metric__label">Trade show sales</dt>
-              <dd className="metric__value">{formatMoney(result.tradeShowSales)}</dd>
+              <dd className="metric__value-wrap">
+                <span className="metric__value">{formatMoney(result.tradeShowSales)}</span>
+                <button
+                  type="button"
+                  className="copy-btn"
+                  onClick={() => copyAmount('tradeShowSales', result.tradeShowSales)}
+                >
+                  {copiedMetric === 'tradeShowSales' ? 'Copied' : 'Copy'}
+                </button>
+              </dd>
             </div>
             <div className="metric metric--out">
               <dt className="metric__label">Refunds (total)</dt>
-              <dd className="metric__value">{formatMoney(result.refunds)}</dd>
+              <dd className="metric__value-wrap">
+                <span className="metric__value">{formatMoney(result.refunds)}</span>
+                <button
+                  type="button"
+                  className="copy-btn"
+                  onClick={() => copyAmount('refunds', result.refunds)}
+                >
+                  {copiedMetric === 'refunds' ? 'Copied' : 'Copy'}
+                </button>
+              </dd>
             </div>
             <div className="metric metric--out">
               <dt className="metric__label">Fees (total)</dt>
-              <dd className="metric__value">{formatMoney(result.fees)}</dd>
+              <dd className="metric__value-wrap">
+                <span className="metric__value">{formatMoney(result.fees)}</span>
+                <button
+                  type="button"
+                  className="copy-btn"
+                  onClick={() => copyAmount('fees', result.fees)}
+                >
+                  {copiedMetric === 'fees' ? 'Copied' : 'Copy'}
+                </button>
+              </dd>
             </div>
           </dl>
           <p className="hint">
@@ -201,7 +450,7 @@ export default function App() {
         </section>
       )}
 
-      {!result && rows.length === 0 && !error && (
+      {!result && payoutEntries.length === 0 && !error && (
         <p className="empty">Add at least one payout CSV to see numbers.</p>
       )}
     </div>

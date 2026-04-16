@@ -56,6 +56,51 @@
   font-size: 0.875rem;
   padding: 0.5rem 0;
   color: var(--color-fg);
+  display: none;
+}
+
+.dropzone {
+  border: 1px dashed var(--color-border-strong);
+  border-radius: 0.6rem;
+  padding: 0.9rem;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+  background: var(--color-code-bg);
+  cursor: pointer;
+}
+
+.dropzone--active {
+  border-color: var(--color-accent);
+  color: var(--color-fg);
+}
+
+.file-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.file-list__item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--color-fg);
+}
+
+.file-list__remove {
+  border: 1px solid var(--color-border-strong);
+  border-radius: 0.45rem;
+  background: transparent;
+  color: var(--color-fg);
+  font: inherit;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.45rem;
+  cursor: pointer;
 }
 
 .hint {
@@ -115,8 +160,26 @@
   color: var(--color-fg);
 }
 
+.metric__value-wrap {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .metric--out .metric__value {
   color: var(--color-muted);
+}
+
+.copy-btn {
+  border: 1px solid var(--color-border-strong);
+  border-radius: 0.45rem;
+  background: transparent;
+  color: var(--color-fg);
+  font: inherit;
+  font-size: 0.75rem;
+  padding: 0.2rem 0.45rem;
+  cursor: pointer;
 }
 
 .totals {
