@@ -17,6 +17,8 @@ const ORDER_KEYS = [
 ]
 const SOURCE_KEYS = [
   'source',
+  'card source',
+  'card_source',
   'source name',
   'channel',
   'payment source',
@@ -112,6 +114,20 @@ function sourceIsPos(source) {
   )
 }
 
+function typeIsStripeTerminal(type) {
+  return String(type || '').toLowerCase().includes('stripe_terminal')
+}
+
+function sourceIsOnline(source) {
+  const s = String(source || '').toLowerCase()
+  return s.includes('online')
+}
+
+function sourceIsStripeTerminal(source) {
+  const s = String(source || '').toLowerCase()
+  return s.includes('stripe-terminal') || s.includes('stripe_terminal')
+}
+
 /**
  * Build a Set of order ids from show list rows (flexible columns).
  */
@@ -127,9 +143,7 @@ export function extractShowOrderIds(rows) {
       h.includes('receipt') ||
       h === 'name',
   )
-  if (!orderCol) {
-    orderCol = headers[0]
-  }
+  if (!orderCol) return ids
 
   const key =
     Object.keys(rows[0]).find((k) => normHeader(k) === orderCol) || Object.keys(rows[0])[0]
@@ -214,7 +228,12 @@ export function aggregatePayoutRows(payoutRows, showOrderIds) {
     const isTradeShowOrder = [...orderTokens].some((token) => showSet.has(token))
     if (isTradeShowOrder) {
       tradeShowSales += valueBase
-    } else if (sourceIsPos(source)) {
+    } else if (sourceIsStripeTerminal(source)) {
+      shopSales += valueBase
+    } else if (sourceIsOnline(source)) {
+      onlineSales += valueBase
+    } else if (typeIsStripeTerminal(typeRaw) || sourceIsPos(source)) {
+      // Backward-compatible fallback when Card Source is missing/inconsistent.
       shopSales += valueBase
     } else {
       onlineSales += valueBase
