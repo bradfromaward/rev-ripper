@@ -1,53 +1,22 @@
-.app {
+.layout {
   min-height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: clamp(1.5rem, 5vw, 3rem);
-}
-
-.header {
-  width: 100%;
-  max-width: 28rem;
-  text-align: center;
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: clamp(1.5rem, 4vw, 2.5rem) clamp(1rem, 3vw, 1.5rem) 3rem;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 1.25rem;
+  gap: 1.75rem;
 }
 
-.logos {
+.hero {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-}
-
-.logos__plus {
-  font-size: 1.25rem;
-  font-weight: 500;
-  color: var(--color-muted);
-  user-select: none;
-}
-
-.logo {
-  height: 3rem;
-  width: 3rem;
-  will-change: filter;
-  transition: filter 0.25s ease;
-}
-
-.logo--vite:hover {
-  filter: drop-shadow(0 0 1.1rem var(--glow-vite));
-}
-
-.logo--react:hover {
-  filter: drop-shadow(0 0 1.1rem var(--glow-react));
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 .title {
   margin: 0;
-  font-size: clamp(1.75rem, 4vw, 2.25rem);
+  font-size: clamp(1.5rem, 4vw, 2rem);
   font-weight: 600;
   letter-spacing: -0.03em;
   color: var(--color-fg);
@@ -55,42 +24,151 @@
 
 .lede {
   margin: 0;
-  font-size: 1rem;
-  line-height: 1.6;
+  font-size: 0.9375rem;
+  line-height: 1.55;
   color: var(--color-muted);
 }
 
-.lede code {
-  font-size: 0.9em;
-}
-
-.button {
-  margin-top: 0.25rem;
-  font-family: inherit;
-  font-size: 0.9375rem;
-  font-weight: 500;
-  padding: 0.65rem 1.25rem;
-  border-radius: 0.5rem;
+.panel {
+  padding: 1.25rem;
+  border-radius: 0.75rem;
   border: 1px solid var(--color-border);
   background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.label {
+  font-size: 0.8125rem;
+  font-weight: 600;
   color: var(--color-fg);
-  cursor: pointer;
-  transition:
-    background 0.2s ease,
-    border-color 0.2s ease,
-    box-shadow 0.2s ease;
 }
 
-.button:hover {
-  background: var(--color-surface-hover);
-  border-color: var(--color-border-strong);
+.input {
+  font: inherit;
+  font-size: 0.875rem;
+  padding: 0.5rem 0;
+  color: var(--color-fg);
 }
 
-.button:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
+.hint {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--color-muted);
 }
 
-.button:active {
-  transform: translateY(1px);
+.alert {
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-code-bg);
+  color: var(--color-fg);
+  font-size: 0.875rem;
+}
+
+.results__title {
+  margin: 0 0 0.75rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-fg);
+}
+
+.grid {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.metric {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: baseline;
+  gap: 0.75rem 1rem;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.metric:last-of-type {
+  border-bottom: none;
+}
+
+.metric__label {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-muted);
+  font-weight: 400;
+}
+
+.metric__value {
+  margin: 0;
+  font-size: 1.0625rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-fg);
+}
+
+.metric--out .metric__value {
+  color: var(--color-muted);
+}
+
+.totals {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.total {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+}
+
+.total__label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-fg);
+}
+
+.total__value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-accent);
+}
+
+.total--gross .total__value {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: var(--color-fg);
+}
+
+.total--sum5 .total__value {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  color: var(--color-muted);
+}
+
+.total-note {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--color-muted);
+}
+
+.empty {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--color-muted);
 }
